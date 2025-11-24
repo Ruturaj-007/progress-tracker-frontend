@@ -9,8 +9,7 @@ export default defineConfig({
       "/api": {
         target: "https://progress-tracker-backend-production.up.railway.app",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
-  },
+      }
+    }
+  }
 });
