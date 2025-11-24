@@ -26,22 +26,18 @@ const TaskListScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Find task list directly from state instead of maintaining separate state
   const taskList = state.taskLists.find((tl) => listId === tl.id);
 
-  // Single useEffect to handle all initial data loading
   useEffect(() => {
     const loadInitialData = async () => {
       if (!listId) return;
 
       setIsLoading(true);
       try {
-        // Only fetch if we don't already have the task list
         if (!taskList) {
           await api.getTaskList(listId);
         }
 
-        // Attempt to fetch tasks - this may 404 but we'll try anyway
         try {
           await api.fetchTasks(listId);
         } catch (error) {
@@ -55,105 +51,90 @@ const TaskListScreen: React.FC = () => {
     };
 
     loadInitialData();
-  }, [listId]); // Only depend on listId
+  }, [listId]);
 
-  // Calculate completion percentage based on tasks
   const completionPercentage = React.useMemo(() => {
     if (listId && state.tasks[listId]) {
       const tasks = state.tasks[listId];
-      const closeTaskCount = tasks.filter(
-        (task) => task.status === TaskStatus.CLOSED
+      const closedCount = tasks.filter(
+          (task) => task.status === TaskStatus.CLOSED
       ).length;
-      return tasks.length > 0 ? (closeTaskCount / tasks.length) * 100 : 0;
+      return tasks.length > 0 ? (closedCount / tasks.length) * 100 : 0;
     }
     return 0;
   }, [state.tasks, listId]);
 
   const toggleStatus = (task: Task) => {
-    if (listId) {
-      const updatedTask = { ...task };
-      updatedTask.status =
+    if (!listId || !task.id) return;
+
+    const updatedTask = { ...task };
+    updatedTask.status =
         task.status === TaskStatus.CLOSED ? TaskStatus.OPEN : TaskStatus.CLOSED;
 
-      api
-        .updateTask(listId, task.id, updatedTask)
-        .then(() => api.fetchTasks(listId));
-    }
+    api.updateTask(listId, task.id, updatedTask).then(() => api.fetchTasks(listId));
   };
 
   const deleteTaskList = async () => {
-    if (null != listId) {
-      await api.deleteTaskList(listId);
-      navigate("/");
-    }
+    if (!listId) return;
+    await api.deleteTaskList(listId);
+    navigate("/");
   };
 
   const tableRows = () => {
-    if (null != listId && null != state.tasks[listId]) {
+    if (listId && state.tasks[listId]) {
       return state.tasks[listId].map((task) => (
-        <TableRow key={task.id} className="border-t">
-          <TableCell className="px-4 py-2">
-            <Checkbox
-              isSelected={TaskStatus.CLOSED == task.status}
-              onValueChange={() => toggleStatus(task)}
-              aria-label={`Mark task "${task.title}" as ${
-                TaskStatus.CLOSED == task.status ? "open" : "closed"
-              }`}
-            />
-          </TableCell>
-          <TableCell className="px-4 py-2">{task.title}</TableCell>
-          <TableCell className="px-4 py-2">{task.priority}</TableCell>
-          <TableCell className="px-4 py-2">
-            {task.dueDate && (
-              <DateInput
-                isDisabled
-                defaultValue={parseDate(
-                  new Date(task.dueDate).toISOString().split("T")[0]
-                )}
-                aria-label={`Due date for task "${task.title}"`}
+          <TableRow key={task.id} className="border-t">
+            <TableCell className="px-4 py-2">
+              <Checkbox
+                  isSelected={task.status === TaskStatus.CLOSED}
+                  onValueChange={() => toggleStatus(task)}
               />
-            )}
-          </TableCell>
-          <TableCell className="px-4 py-2">
-            <div className="flex space-x-2">
-              <Button
-                variant="ghost"
-                aria-label={`Edit task "${task.title}"`}
-                onClick={() =>
-                  navigate(`/task-lists/${listId}/edit-task/${task.id}`)
-                }
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => api.deleteTask(listId, task.id)}
-                aria-label={`Delete task "${task.title}"`}
-              >
-                <Trash className="h-4 w-4" />
-              </Button>
-            </div>
-          </TableCell>
-        </TableRow>
+            </TableCell>
+            <TableCell className="px-4 py-2">{task.title}</TableCell>
+            <TableCell className="px-4 py-2">{task.priority}</TableCell>
+            <TableCell className="px-4 py-2">
+              {task.dueDate && (
+                  <DateInput
+                      isDisabled
+                      defaultValue={parseDate(
+                          new Date(task.dueDate).toISOString().split("T")[0]
+                      )}
+                  />
+              )}
+            </TableCell>
+            <TableCell className="px-4 py-2">
+              <div className="flex space-x-2">
+                <Button
+                    variant="ghost"
+                    onClick={() =>
+                        task.id &&
+                        navigate(`/task-lists/${listId}/edit-task/${task.id}`)
+                    }
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    onClick={() => task.id && api.deleteTask(listId, task.id)}
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
       ));
-    } else {
-      return null;
     }
+    return [];
   };
 
   if (isLoading) {
-    return <Spinner />; // Or your preferred loading indicator
+    return <Spinner />;
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex w-full items-center justify-between">
-          <Button
-            variant="ghost"
-            aria-label="Go back to Task Lists"
-            onClick={() => navigate("/")}
-          >
+      <div className="p-4 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <Button variant="ghost" onClick={() => navigate("/")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
@@ -162,53 +143,43 @@ const TaskListScreen: React.FC = () => {
           </h1>
 
           <Button
-            variant="ghost"
-            aria-label={`Edit task list`}
-            onClick={() => navigate(`/edit-task-list/${listId}`)}
+              variant="ghost"
+              onClick={() => navigate(`/edit-task-list/${listId}`)}
           >
             <Edit className="h-4 w-4" />
           </Button>
         </div>
-      </div>
 
-      <Progress
-        value={completionPercentage}
-        className="mb-4"
-        aria-label="Task completion progress"
-      />
-      <Button
-        onClick={() => navigate(`/task-lists/${listId}/new-task`)}
-        aria-label="Add new task"
-        className="mb-4 w-full"
-      >
-        <Plus className="h-4 w-4" /> Add Task
-      </Button>
-      <div className="border rounded-lg overflow-hidden">
-        <Table className="w-full" aria-label="Tasks list">
-          <TableHeader>
-            <TableColumn>Completed</TableColumn>
-            <TableColumn>Title</TableColumn>
-            <TableColumn>Priority</TableColumn>
-            <TableColumn>Due Date</TableColumn>
-            <TableColumn>Actions</TableColumn>
-          </TableHeader>
-          <TableBody>{tableRows()}</TableBody>
-        </Table>
-      </div>
-      <Spacer y={4} />
-      <div className="flex justify-end">
+        <Progress value={completionPercentage} className="mb-4" />
         <Button
-          color="danger"
-          startContent={<Minus size={20} />}
-          onClick={deleteTaskList}
-          aria-label="Delete current task list"
+            onClick={() => navigate(`/task-lists/${listId}/new-task`)}
+            className="mb-4 w-full"
         >
-          Delete TaskList
+          <Plus className="h-4 w-4" /> Add Task
         </Button>
-      </div>
 
-      <Spacer y={4} />
-    </div>
+        <div className="border rounded-lg overflow-hidden">
+          <Table className="w-full">
+            <TableHeader>
+              <TableColumn>Completed</TableColumn>
+              <TableColumn>Title</TableColumn>
+              <TableColumn>Priority</TableColumn>
+              <TableColumn>Due Date</TableColumn>
+              <TableColumn>Actions</TableColumn>
+            </TableHeader>
+            <TableBody>{tableRows()}</TableBody>
+          </Table>
+        </div>
+
+        <Spacer y={4} />
+        <div className="flex justify-end">
+          <Button color="danger" startContent={<Minus size={20} />} onClick={deleteTaskList}>
+            Delete TaskList
+          </Button>
+        </div>
+
+        <Spacer y={4} />
+      </div>
   );
 };
 
